@@ -4,6 +4,9 @@ import { HttpRequestEventMap, IS_PATCHED_MODULE } from '../../glossary'
 import { Interceptor } from '../../Interceptor'
 import { uuidv4 } from '../../utils/uuid'
 import { toInteractiveRequest } from '../../utils/toInteractiveRequest'
+import type { XMLHttpRequestEnvironment } from '../XMLHttpRequest'
+
+export type FetchEnvironment = Pick<typeof globalThis, 'fetch'>
 
 export class FetchInterceptor extends Interceptor<HttpRequestEventMap> {
   static symbol = Symbol('fetch')
@@ -12,22 +15,21 @@ export class FetchInterceptor extends Interceptor<HttpRequestEventMap> {
     super(FetchInterceptor.symbol)
   }
 
-  protected checkEnvironment() {
-    return (
-      typeof globalThis !== 'undefined' &&
-      typeof globalThis.fetch !== 'undefined'
-    )
+  protected checkEnvironment(
+    environment: FetchEnvironment | XMLHttpRequestEnvironment
+  ): environment is FetchEnvironment {
+    return 'fetch' in environment && typeof environment.fetch !== 'undefined'
   }
 
-  protected setup() {
-    const pureFetch = globalThis.fetch
+  protected setup(environment: FetchEnvironment) {
+    const pureFetch = environment.fetch
 
     invariant(
       !(pureFetch as any)[IS_PATCHED_MODULE],
       'Failed to patch the "fetch" module: already patched.'
     )
 
-    globalThis.fetch = async (input, init) => {
+    environment.fetch = async (input, init) => {
       const requestId = uuidv4()
       const request = new Request(input, init)
 
@@ -109,23 +111,20 @@ export class FetchInterceptor extends Interceptor<HttpRequestEventMap> {
       })
     }
 
-    Object.defineProperty(globalThis.fetch, IS_PATCHED_MODULE, {
+    Object.defineProperty(environment.fetch, IS_PATCHED_MODULE, {
       enumerable: true,
       configurable: true,
       value: true,
     })
 
     this.subscriptions.push(() => {
-      Object.defineProperty(globalThis.fetch, IS_PATCHED_MODULE, {
+      Object.defineProperty(environment.fetch, IS_PATCHED_MODULE, {
         value: undefined,
       })
 
-      globalThis.fetch = pureFetch
+      environment.fetch = pureFetch
 
-      this.logger.info(
-        'restored native "globalThis.fetch"!',
-        globalThis.fetch.name
-      )
+      this.logger.info('restored native "fetch"!', environment.fetch.name)
     })
   }
 }

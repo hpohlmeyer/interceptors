@@ -1,6 +1,8 @@
 import { Logger } from '@open-draft/logger'
 import { Listener } from 'strict-event-emitter'
 import { AsyncEventEmitter } from './utils/AsyncEventEmitter'
+import type { FetchEnvironment } from './interceptors/fetch'
+import type { XMLHttpRequestEnvironment } from './interceptors/XMLHttpRequest'
 
 export type InterceptorEventMap = Record<string, any>
 export type InterceptorSubscription = () => void
@@ -58,7 +60,9 @@ export class Interceptor<Events extends InterceptorEventMap> {
    * Determine if this interceptor can be applied
    * in the current environment.
    */
-  protected checkEnvironment(): boolean {
+  protected checkEnvironment(
+    environment: FetchEnvironment | XMLHttpRequestEnvironment
+  ): boolean {
     return true
   }
 
@@ -66,7 +70,9 @@ export class Interceptor<Events extends InterceptorEventMap> {
    * Apply this interceptor to the current process.
    * Returns an already running interceptor instance if it's present.
    */
-  public apply(): void {
+  public apply(
+    environment: FetchEnvironment | XMLHttpRequestEnvironment = globalThis
+  ): void {
     const logger = this.logger.extend('apply')
     logger.info('applying the interceptor...')
 
@@ -75,7 +81,7 @@ export class Interceptor<Events extends InterceptorEventMap> {
       return
     }
 
-    const shouldApply = this.checkEnvironment()
+    const shouldApply = this.checkEnvironment(environment)
 
     if (!shouldApply) {
       logger.info('the interceptor cannot be applied in this environment!')
@@ -135,7 +141,9 @@ export class Interceptor<Events extends InterceptorEventMap> {
    * This method is not run if there's a running interceptor instance
    * to prevent instantiating an interceptor multiple times.
    */
-  protected setup(): void {}
+  protected setup(
+    environment?: FetchEnvironment | XMLHttpRequestEnvironment
+  ): void {}
 
   /**
    * Listen to the interceptor's public events.

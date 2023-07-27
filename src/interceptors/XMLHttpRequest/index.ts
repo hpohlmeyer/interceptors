@@ -4,6 +4,12 @@ import { InteractiveRequest } from '../../utils/toInteractiveRequest'
 import { Interceptor } from '../../Interceptor'
 import { AsyncEventEmitter } from '../../utils/AsyncEventEmitter'
 import { createXMLHttpRequestProxy } from './XMLHttpRequestProxy'
+import type { FetchEnvironment } from '../fetch'
+
+export type XMLHttpRequestEnvironment = Pick<
+  typeof globalThis,
+  'XMLHttpRequest'
+>
 
 export type XMLHttpRequestEventListener = (
   request: InteractiveRequest,
@@ -19,47 +25,52 @@ export class XMLHttpRequestInterceptor extends Interceptor<HttpRequestEventMap> 
     super(XMLHttpRequestInterceptor.interceptorSymbol)
   }
 
-  protected checkEnvironment() {
-    return typeof globalThis.XMLHttpRequest !== 'undefined'
+  protected checkEnvironment(
+    environment: FetchEnvironment | XMLHttpRequestEnvironment
+  ): environment is XMLHttpRequestEnvironment {
+    return (
+      'XMLHttpRequest' in environment &&
+      typeof environment.XMLHttpRequest !== 'undefined'
+    )
   }
 
-  protected setup() {
+  protected setup(environment: XMLHttpRequestEnvironment) {
     const logger = this.logger.extend('setup')
 
     logger.info('patching "XMLHttpRequest" module...')
 
-    const PureXMLHttpRequest = globalThis.XMLHttpRequest
+    const PureXMLHttpRequest = environment.XMLHttpRequest
 
     invariant(
       !(PureXMLHttpRequest as any)[IS_PATCHED_MODULE],
       'Failed to patch the "XMLHttpRequest" module: already patched.'
     )
 
-    globalThis.XMLHttpRequest = createXMLHttpRequestProxy({
+    environment.XMLHttpRequest = createXMLHttpRequestProxy({
       emitter: this.emitter,
       logger: this.logger,
     })
 
     logger.info(
       'native "XMLHttpRequest" module patched!',
-      globalThis.XMLHttpRequest.name
+      environment.XMLHttpRequest.name
     )
 
-    Object.defineProperty(globalThis.XMLHttpRequest, IS_PATCHED_MODULE, {
+    Object.defineProperty(environment.XMLHttpRequest, IS_PATCHED_MODULE, {
       enumerable: true,
       configurable: true,
       value: true,
     })
 
     this.subscriptions.push(() => {
-      Object.defineProperty(globalThis.XMLHttpRequest, IS_PATCHED_MODULE, {
+      Object.defineProperty(environment.XMLHttpRequest, IS_PATCHED_MODULE, {
         value: undefined,
       })
 
-      globalThis.XMLHttpRequest = PureXMLHttpRequest
+      environment.XMLHttpRequest = PureXMLHttpRequest
       logger.info(
         'native "XMLHttpRequest" module restored!',
-        globalThis.XMLHttpRequest.name
+        environment.XMLHttpRequest.name
       )
     })
   }
